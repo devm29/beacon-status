@@ -1,0 +1,38 @@
+{
+  "name": "@beacon/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "@beacon/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "@beacon/source": "./src/testing/index.ts",
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "seed": "tsx --conditions=@beacon/source --env-file-if-exists=../../.env src/seed/main.ts"
+  },
+  "dependencies": {
+    "@beacon/shared": "workspace:*",
+    "bullmq": "^5.61.0",
+    "ioredis": "^5.8.0",
+    "mongoose": "^8.19.0",
+    "pino": "^9.13.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "pino-pretty": "^13.1.0",
+    "tsx": "^4.20.0",
+    "vitest": "^3.2.4"
+  }
+}

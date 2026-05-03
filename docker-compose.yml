@@ -1,0 +1,134 @@
+# Full Beacon stack: three region probers, evaluator, API, web, a chaos target to break on purpose,
+# and Mailpit to catch alert emails.
+#
+#   cp .env.example .env   # then set REALTIME_SECRET, REVALIDATE_SECRET and CHAOS_ADMIN_TOKEN,
+#                          # e.g. with `openssl rand -hex 32`; production refuses the dev defaults
+#   docker compose up --build
+#
+# Then open http://localhost:3111 and sign in with the seeded demo key (DEMO_API_KEY).
+# Host ports are bound to 127.0.0.1: MongoDB and Redis run without authentication.
+name: beacon
+
+x-node-env: &node-env
+  NODE_ENV: production
+  LOG_LEVEL: info
+  MONGO_URL: mongodb://mongo:27017/beacon
+  REDIS_URL: redis://redis:6379
+
+x-prober: &prober
+  build: { context: ., dockerfile: docker/node.Dockerfile, target: runtime, args: { APP: prober } }
+  restart: unless-stopped
+  depends_on:
+    mongo: { condition: service_healthy }
+    redis: { condition: service_healthy }
+
+# The demo monitors the chaos target, MongoDB and Redis on this network, so probers and the
+# evaluator may reach private addresses here. Leave it off when monitoring only public endpoints.
+x-egress: &egress
+  ALLOW_PRIVATE_TARGETS: "true"
+
+services:
+  mongo:
+    image: mongo:7
+    ports: ["127.0.0.1:27111:27017"]
+    volumes: [mongo-data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:6411:6379"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"]
+
+  chaos-target:
+    build: { context: ., dockerfile: docker/node.Dockerfile, target: runtime, args: { APP: chaos-target } }
+    environment:
+      NODE_ENV: production
+      CHAOS_PORT: 5511
+      CHAOS_ADMIN_TOKEN: ${CHAOS_ADMIN_TOKEN:?Set CHAOS_ADMIN_TOKEN in .env}
+    ports: ["127.0.0.1:5511:5511"]
+
+  seed:
+    build: { context: ., dockerfile: docker/node.Dockerfile, target: tools, args: { APP: core } }
+    environment:
+      <<: *node-env
+      NODE_ENV: development
+      CHAOS_URL: http://chaos-target:5511
+      SEED_DATABASE_TCP: mongo:27017
+      SEED_CACHE_TCP: redis:6379
+      DEMO_API_KEY: ${DEMO_API_KEY:-bk_demo_acme_local_development_key}
+    depends_on:
+      mongo: { condition: service_healthy }
+    restart: "no"
+
+  prober-us-east:
+    <<: *prober
+    environment: { <<: [*node-env, *egress], REGION: us-east, SIMULATED_RTT_MS: "us-east:0" }
+
+  prober-eu-west:
+    <<: *prober
+    environment: { <<: [*node-env, *egress], REGION: eu-west, SIMULATED_RTT_MS: "eu-west:38" }
+
+  prober-ap-southeast:
+    <<: *prober
+    environment: { <<: [*node-env, *egress], REGION: ap-southeast, SIMULATED_RTT_MS: "ap-southeast:92" }
+
+  evaluator:
+    build: { context: ., dockerfile: docker/node.Dockerfile, target: runtime, args: { APP: evaluator } }
+    restart: unless-stopped
+    environment:
+      <<: [*node-env, *egress]
+      PUBLIC_WEB_URL: http://localhost:3111
+      SMTP_URL: smtp://mailpit:1025
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      seed: { condition: service_completed_successfully }
+
+  api:
+    build: { context: ., dockerfile: docker/node.Dockerfile, target: runtime, args: { APP: api } }
+    restart: unless-stopped
+    environment:
+      <<: *node-env
+      API_PORT: 8111
+      CORS_ORIGINS: http://localhost:3111
+      PUBLIC_WEB_URL: http://localhost:3111
+      WEB_REVALIDATE_URL: http://web:3111/api/revalidate
+      REALTIME_SECRET: ${REALTIME_SECRET:?Set REALTIME_SECRET in .env}
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:?Set REVALIDATE_SECRET in .env}
+    ports: ["8111:8111"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8111/readyz"]
+      interval: 5s
+      retries: 20
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:8111
+      BROWSER_API_URL: http://localhost:8111
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:?Set REVALIDATE_SECRET in .env}
+    ports: ["3111:3111"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3111/login"]
+      interval: 5s
+      retries: 30
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  mongo-data:

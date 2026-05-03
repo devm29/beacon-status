@@ -1,0 +1,25 @@
+{
+  "name": "@beacon/prober",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --conditions=@beacon/source --env-file-if-exists=../../.env src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@beacon/core": "workspace:*",
+    "@beacon/shared": "workspace:*",
+    "bullmq": "^5.61.0",
+    "zod": "^4.1.0",
+    "mongoose": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.0",
+    "vitest": "^3.2.4"
+  }
+}

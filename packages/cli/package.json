@@ -1,0 +1,26 @@
+{
+  "name": "@beacon/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Monitoring-as-code for Beacon: validate, plan and apply beacon.yaml",
+  "bin": {
+    "beacon": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@beacon/shared": "workspace:*",
+    "commander": "^14.0.0",
+    "yaml": "^2.8.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.0",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,128 @@
+# Monitoring-as-code for the Acme demo organization.
+#   pnpm beacon plan  -f examples/beacon.yaml
+#   pnpm beacon apply -f examples/beacon.yaml
+# ${VAR:-default} placeholders are expanded from the environment, so secrets stay out of git.
+version: 1
+
+statusPage:
+  title: Acme Cloud Status
+  description: Live availability of the Acme storefront, APIs and supporting infrastructure.
+  groups: [Storefront, Core platform, Edge & certificates]
+  supportUrl: https://acme.dev/support
+
+monitors:
+  - key: storefront
+    name: Storefront
+    description: acme.shop home page, checked for the Add to cart button
+    group: Storefront
+    check:
+      type: keyword
+      url: ${CHAOS_URL:-http://127.0.0.1:5511}/
+      keyword: Add to cart
+    intervalSeconds: 30
+    timeoutMs: 8000
+    degradedLatencyMs: 1200
+
+  - key: checkout-api
+    name: Checkout API
+    description: Cart and payment orchestration
+    group: Storefront
+    check:
+      type: http
+      url: ${CHAOS_URL:-http://127.0.0.1:5511}/api/checkout
+    intervalSeconds: 30
+    timeoutMs: 8000
+    degradedLatencyMs: 800
+
+  - key: search-api
+    name: Search
+    description: Product search and autocomplete
+    group: Storefront
+    check:
+      type: http
+      url: ${CHAOS_URL:-http://127.0.0.1:5511}/api/search?q=notebook
+    degradedLatencyMs: 1000
+
+  - key: public-api
+    name: Public API
+    description: api.acme.dev REST endpoints
+    group: Core platform
+    check:
+      type: http
+      url: ${CHAOS_URL:-http://127.0.0.1:5511}/health
+    intervalSeconds: 30
+    timeoutMs: 5000
+
+  - key: primary-database
+    name: Primary database
+    description: Managed document store, TCP reachability
+    group: Core platform
+    check:
+      type: tcp
+      host: ${DATABASE_HOST:-127.0.0.1}
+      port: 27111
+
+  - key: session-cache
+    name: Session cache
+    description: Redis cluster backing logins and carts
+    group: Core platform
+    check:
+      type: tcp
+      host: ${CACHE_HOST:-127.0.0.1}
+      port: 6411
+
+slos:
+  - key: checkout-availability
+    name: Checkout availability
+    monitor: checkout-api
+    target: 99.9
+    windowDays: 30
+  - key: storefront-availability
+    name: Storefront availability
+    monitor: storefront
+    target: 99.5
+    windowDays: 30
+  - key: public-api-availability
+    name: Public API availability
+    monitor: public-api
+    target: 99.95
+    windowDays: 28
+  - key: search-availability
+    name: Search availability
+    monitor: search-api
+    target: 99
+    windowDays: 7
+
+channels:
+  - key: oncall-email
+    name: On-call email
+    target:
+      type: email
+      to: [oncall@acme.dev]
+    events: [incident.opened, incident.updated, incident.resolved, slo.burn]
+
+  - key: incidents-slack
+    name: "#incidents"
+    target:
+      type: slack
+      url: ${SLACK_WEBHOOK_URL:-http://127.0.0.1:5511/sink/slack}
+    events: [incident.opened, incident.updated, incident.resolved, monitor.degraded]
+
+  - key: ops-discord
+    name: Ops Discord
+    target:
+      type: discord
+      url: ${DISCORD_WEBHOOK_URL:-http://127.0.0.1:5511/sink/discord}
+    events: [incident.opened, incident.resolved]
+    monitors: [checkout-api, storefront]
+
+  - key: pager-bridge
+    name: Pager bridge
+    target:
+      type: webhook
+      url: ${PAGER_WEBHOOK_URL:-http://127.0.0.1:5511/sink/pager}
+      secret: ${PAGER_WEBHOOK_SECRET:-whsec_demo_change_me_0001}
+      headers:
+        x-team: platform
+    events: [incident.opened, incident.resolved, slo.burn]
+    escalationDelaySeconds: 120

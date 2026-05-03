@@ -13,10 +13,9 @@
 [![Redis](https://img.shields.io/badge/Redis%207-BullMQ-DC382D?logo=redis&logoColor=white)](packages/core/src/queues.ts)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO%20%2B%20SSE-realtime-010101?logo=socketdotio&logoColor=white)](apps/api/src/realtime)
 [![Vitest](https://img.shields.io/badge/tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)](#testing)
-[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
-[Why](#why-this-exists) · [Features](#features) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Quickstart](#quickstart) · [Chaos demo](#the-chaos-demo) · [API](#api-overview) · [Decisions](#engineering-decisions-and-trade-offs)
+[Why](#why-this-exists) · [Features](#features) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Quickstart](#quickstart) · [Chaos demo](#the-chaos-demo) · [API](#api-overview) · [Decisions](#engineering-decisions-and-trade-offs) · [Testing](#testing)
 
 <br />
 
@@ -53,19 +52,19 @@ chain react: detection, incident, alert, status page.
 
 ## Features
 
-| | |
-| --- | --- |
-| **Four check types** | HTTP (method, headers, body, expected status like `2xx`), keyword (contains or absent), TCP connect, and SSL certificate expiry with warning and critical thresholds. |
-| **Regional probing** | A BullMQ job scheduler per monitor in each region's queue (`probe-us-east`, `probe-eu-west`, `probe-ap-southeast`). Each prober replica consumes only its own queue, and a simulated RTT makes regions look geographically distinct. |
-| **Quorum + hysteresis** | Pure, unit-tested evaluation function: votes from fresh regions only, round-based streaks, `failThreshold` / `recoverThreshold`, flap detection over a sliding window. |
-| **Time-series storage** | Raw results in a MongoDB time-series collection with TTL retention, rolled up into 1m / 1h / 1d buckets by idempotent `$merge` aggregation pipelines. Rollups carry mergeable latency histograms, so p95 stays correct at every granularity. |
-| **Incident state machine** | `investigating → identified → monitoring → resolved`. Opens automatically, moves to monitoring on recovery, resolves itself after a cool-down, reopens if the failure returns within 15 minutes, and accepts manual timeline updates. |
-| **SLOs and error budgets** | Per-monitor targets over 7, 28, 30 or 90 days. Budget burn-down, burn-rate charts, and four burn policies (fast, sustained, slow, creeping) scaled to the SLO window. |
-| **Alert channels** | Email (SMTP, Mailpit in Docker), Slack, Discord and HMAC-signed generic webhooks behind one provider interface. Per-channel dedup, escalation delay, monitor filters, maintenance-window suppression and a delivery log that explains every decision. |
-| **Monitoring as code** | `beacon.yaml` validated by the same Zod schemas the API uses, synced by a Commander CLI with `init`, `validate`, `plan`, `apply`, `export` and `status`. |
-| **Public status page** | `/status/[slug]` rendered by Next.js with ISR, revalidated on demand by the API, and kept live over Server-Sent Events. 90-day uptime bars, component groups, incident history and an embeddable SVG badge. |
-| **Operator dashboard** | Next.js + shadcn/ui console with Recharts latency sparklines and a live Socket.IO feed of every regional check result. |
-| **Chaos target** | A small Express service that can go `slow`, `errors`, `flaky`, `down` or serve the wrong `content`, for every region or only some. |
+|                            |                                                                                                                                                                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Four check types**       | HTTP (method, headers, body, expected status like `2xx`), keyword (contains or absent), TCP connect, and SSL certificate expiry with warning and critical thresholds.                                                                                 |
+| **Regional probing**       | A BullMQ job scheduler per monitor in each region's queue (`probe-us-east`, `probe-eu-west`, `probe-ap-southeast`). Each prober replica consumes only its own queue, and a simulated RTT makes regions look geographically distinct.                  |
+| **Quorum + hysteresis**    | Pure, unit-tested evaluation function: votes from fresh regions only, round-based streaks, `failThreshold` / `recoverThreshold`, flap detection over a sliding window.                                                                                |
+| **Time-series storage**    | Raw results in a MongoDB time-series collection with TTL retention, rolled up into 1m / 1h / 1d buckets by idempotent `$merge` aggregation pipelines. Rollups carry mergeable latency histograms, so p95 stays correct at every granularity.          |
+| **Incident state machine** | `investigating → identified → monitoring → resolved`. Opens automatically, moves to monitoring on recovery, resolves itself after a cool-down, reopens if the failure returns within 15 minutes, and accepts manual timeline updates.                 |
+| **SLOs and error budgets** | Per-monitor targets over 7, 28, 30 or 90 days. Budget burn-down, burn-rate charts, and four burn policies (fast, sustained, slow, creeping) scaled to the SLO window.                                                                                 |
+| **Alert channels**         | Email (SMTP, Mailpit in Docker), Slack, Discord and HMAC-signed generic webhooks behind one provider interface. Per-channel dedup, escalation delay, monitor filters, maintenance-window suppression and a delivery log that explains every decision. |
+| **Monitoring as code**     | `beacon.yaml` validated by the same Zod schemas the API uses, synced by a Commander CLI with `init`, `validate`, `plan`, `apply`, `export` and `status`.                                                                                              |
+| **Public status page**     | `/status/[slug]` rendered by Next.js with ISR, revalidated on demand by the API, and kept live over Server-Sent Events. 90-day uptime bars, component groups, incident history and an embeddable SVG badge.                                           |
+| **Operator dashboard**     | Next.js + shadcn/ui console with Recharts latency sparklines and a live Socket.IO feed of every regional check result.                                                                                                                                |
+| **Chaos target**           | A small Express service that can go `slow`, `errors`, `flaky`, `down` or serve the wrong `content`, for every region or only some.                                                                                                                    |
 
 <p align="center">
   <img src="docs/screenshots/badge.svg" alt="Example status badge served by the API" />
@@ -79,13 +78,24 @@ chain react: detection, incident, alert, status page.
 
 ![Public status page with every component operational](docs/screenshots/status-page-light.png)
 
+**On a phone.** The status page, the operator overview and the monitor list at 390px wide. Below
+the `sm` breakpoint KPI tiles sit two to a row and the region chips column is dropped, so tables
+never scroll sideways.
+
+<p>
+  <img src="docs/screenshots/status-page-mobile.png" width="24%" alt="Public status page on a phone, all systems operational" />
+  <img src="docs/screenshots/status-page-outage-mobile.png" width="24%" alt="Public status page on a phone during an outage, with active incidents" />
+  <img src="docs/screenshots/overview-mobile.png" width="24%" alt="Operator overview on a phone with KPI tiles two to a row" />
+  <img src="docs/screenshots/monitors-mobile.png" width="24%" alt="Monitor list on a phone, grouped by status page section" />
+</p>
+
 **The same page during the chaos demo.** Incidents are opened and announced with no operator involved.
 
-![Public status page during a major outage with four active incidents](docs/screenshots/status-page-outage-light.png)
+![Public status page during a partial outage with three active incidents](docs/screenshots/status-page-outage-light.png)
 
-**Overview during an outage.** All three regions agree, four monitors are down, and failures stream in live.
+**Overview during an outage.** All three regions agree, three monitors are down, and failures stream in live.
 
-![Operator overview with four monitors down and failed checks in the live feed](docs/screenshots/overview-outage-light.png)
+![Operator overview with three monitors down and failed checks in the live feed](docs/screenshots/overview-outage-light.png)
 
 **Automatic incident.** Opened by the evaluator, with the per-region evidence in the first update.
 
@@ -191,16 +201,16 @@ flowchart TB
   FAN -- "revalidateTag" --> REVAL
 ```
 
-| Package | Role |
-| --- | --- |
-| `apps/api` | Express REST API (`/v1`, API-key auth), public status JSON and SVG badge, Socket.IO for operators, SSE for status pages, config plan/apply endpoints, ISR revalidation webhook calls. |
-| `apps/prober` | BullMQ worker, run as three replicas with a `REGION` env (or one dev process for all three). Runs the check, writes to `check_results`, enqueues the result and publishes a `check.result` event. |
-| `apps/evaluator` | Consumes results, applies quorum and hysteresis with optimistic concurrency, drives incidents, delivers notifications, and runs scheduled maintenance jobs (rollups, SLO burn, incident sweep, scheduler reconcile). |
-| `apps/web` | Next.js 15 App Router, shadcn/ui, Recharts. Operator console and public `/status/[slug]` pages. |
-| `apps/chaos-target` | The service the demo monitors, with an admin endpoint to degrade it and webhook sinks that record alert deliveries. |
-| `packages/shared` | Zod schemas and pure domain logic: checks, monitors, `beacon.yaml`, evaluation, incident transitions, SLO math, uptime bars, histograms, realtime events. |
-| `packages/core` | Mongoose models, repositories, queues, scheduler, rollup / SLO / incident / alert services, egress guard and the demo seed. |
-| `packages/cli` | The `beacon` CLI (Commander). |
+| Package             | Role                                                                                                                                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`          | Express REST API (`/v1`, API-key auth), public status JSON and SVG badge, Socket.IO for operators, SSE for status pages, config plan/apply endpoints, ISR revalidation webhook calls.                                |
+| `apps/prober`       | BullMQ worker, run as three replicas with a `REGION` env (or one dev process for all three). Runs the check, writes to `check_results`, enqueues the result and publishes a `check.result` event.                    |
+| `apps/evaluator`    | Consumes results, applies quorum and hysteresis with optimistic concurrency, drives incidents, delivers notifications, and runs scheduled maintenance jobs (rollups, SLO burn, incident sweep, scheduler reconcile). |
+| `apps/web`          | Next.js 15 App Router, shadcn/ui, Recharts. Operator console and public `/status/[slug]` pages.                                                                                                                      |
+| `apps/chaos-target` | The service the demo monitors, with an admin endpoint to degrade it and webhook sinks that record alert deliveries.                                                                                                  |
+| `packages/shared`   | Zod schemas and pure domain logic: checks, monitors, `beacon.yaml`, evaluation, incident transitions, SLO math, uptime bars, histograms, realtime events.                                                            |
+| `packages/core`     | Mongoose models, repositories, queues, scheduler, rollup / SLO / incident / alert services, egress guard and the demo seed.                                                                                          |
+| `packages/cli`      | The `beacon` CLI (Commander).                                                                                                                                                                                        |
 
 ### Core flow: from a failed probe to a status page update
 
@@ -383,25 +393,27 @@ flowchart TD
 
 ## Tech stack
 
-| Layer | Choice | Why |
-| --- | --- | --- |
-| Language | TypeScript 5.9, `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` | Domain logic with many optional fields and indexed lookups; the compiler catches the gaps. |
-| Runtime | Node.js 22, ES modules | Native `fetch`, `AbortSignal.timeout`, `node:tls` for certificate checks. |
-| API | Express 5, helmet, pino-http | Small surface, explicit middleware order, structured logs. |
-| Validation | Zod 4, shared between API, CLI, web and env parsing | One schema for `beacon.yaml`, request bodies and form validation. |
-| Storage | MongoDB 7 + Mongoose: time-series collection, aggregation pipelines, TTL indexes | Raw probe results are append-only time series; rollups are a natural `$group` + `$merge`. |
-| Jobs | Redis 7 + BullMQ job schedulers | Repeatable per-monitor schedules, sharding by queue, retries with backoff, delayed jobs for escalation. |
-| Realtime | Socket.IO (operators), Server-Sent Events (public), Redis pub/sub | Authenticated bidirectional channel for the console, cache-friendly one-way stream for anonymous visitors. |
-| Frontend | Next.js 15 App Router, ISR + `revalidateTag`, shadcn/ui, Tailwind 4, Recharts, next-themes | Status pages are static until something changes; the console follows Apple's HIG: system font, grouped cards, restrained colour. |
-| CLI | Commander, `yaml` | Familiar plan/apply UX with Terraform-style exit codes. |
-| Alerts | nodemailer (SMTP / Mailpit), Slack and Discord webhooks, HMAC-signed webhooks | Provider interface keyed by channel type. |
-| Tooling | pnpm workspaces, Vitest, Supertest, Playwright, ESLint (typescript-eslint), Prettier, Docker Compose, GitHub Actions | |
+| Layer      | Choice                                                                                               | Why                                                                                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Language   | TypeScript 5.9, `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`                   | Domain logic with many optional fields and indexed lookups; the compiler catches the gaps.                                                                                                                               |
+| Runtime    | Node.js 22, ES modules                                                                               | Native `fetch`, `AbortSignal.timeout`, `node:tls` for certificate checks.                                                                                                                                                |
+| API        | Express 5, helmet, pino-http                                                                         | Small surface, explicit middleware order, structured logs.                                                                                                                                                               |
+| Validation | Zod 4, shared between API, CLI, web and env parsing                                                  | One schema for `beacon.yaml`, request bodies and form validation.                                                                                                                                                        |
+| Storage    | MongoDB 7 + Mongoose: time-series collection, aggregation pipelines, TTL indexes                     | Raw probe results are append-only time series; rollups are a natural `$group` + `$merge`.                                                                                                                                |
+| Jobs       | Redis 7 + BullMQ job schedulers                                                                      | Repeatable per-monitor schedules, sharding by queue, retries with backoff, delayed jobs for escalation.                                                                                                                  |
+| Realtime   | Socket.IO (operators), Server-Sent Events (public), Redis pub/sub                                    | Authenticated bidirectional channel for the console, cache-friendly one-way stream for anonymous visitors.                                                                                                               |
+| Frontend   | Next.js 15 App Router, ISR + `revalidateTag`, shadcn/ui, Tailwind 4, Recharts, next-themes           | Status pages are static until something changes. The console pairs IBM Plex Sans with Plex Mono (bundled, so builds never fetch fonts) and keeps one deep-teal accent, leaving green, amber and red to mean status only. |
+| CLI        | Commander, `yaml`                                                                                    | Familiar plan/apply UX with Terraform-style exit codes.                                                                                                                                                                  |
+| Alerts     | nodemailer (SMTP / Mailpit), Slack and Discord webhooks, HMAC-signed webhooks                        | Provider interface keyed by channel type.                                                                                                                                                                                |
+| Tooling    | pnpm workspaces, Vitest, Supertest, Playwright, ESLint (typescript-eslint), Prettier, Docker Compose |                                                                                                                                                                                                                          |
 
 ## Quickstart
 
 ### Local, no Docker
 
-Requires Node 22+, pnpm 9, and `mongod`, `mongosh`, `redis-server` on your `PATH`.
+Requires Node 22 (see `.nvmrc`), pnpm 9 (`corepack enable` picks the pinned version), and `mongod`,
+`mongosh`, `redis-server` on your `PATH`. If you would rather not install MongoDB and Redis, run
+only those two from Compose (`docker compose up -d mongo redis`); they listen on the same ports.
 
 ```bash
 pnpm install
@@ -410,12 +422,12 @@ pnpm seed               # demo org "acme": 8 monitors, 90 days of history, SLOs,
 pnpm dev                # chaos target, API, evaluator, 3 region probers and the web app
 ```
 
-| | |
-| --- | --- |
+|                    |                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
 | Operator dashboard | http://localhost:3111 (signed in automatically in development; the key is `bk_demo_acme_local_development_key`) |
-| Public status page | http://localhost:3111/status/acme |
-| API | http://localhost:8111 (`/healthz`, `/readyz`) |
-| Status badge | http://localhost:8111/public/status/acme/badge.svg |
+| Public status page | http://localhost:3111/status/acme                                                                               |
+| API                | http://localhost:8111 (`/healthz`, `/readyz`)                                                                   |
+| Status badge       | http://localhost:8111/public/status/acme/badge.svg                                                              |
 
 `pnpm dev` copies `.env.example` to `.env` if it is missing. Stop with `Ctrl-C`, then `./scripts/infra.sh down`.
 
@@ -454,12 +466,12 @@ to monitoring and resolve themselves three minutes later.
 ```bash
 pnpm beacon validate -f examples/beacon.yaml          # offline schema check
 pnpm beacon plan     -f examples/beacon.yaml          # diff against the server
-pnpm beacon plan     -f examples/beacon.yaml --detailed-exitcode   # exit 2 on drift, for CI
 pnpm beacon apply    -f examples/beacon.yaml --prune  # confirm with "yes", or --auto-approve
 pnpm beacon export   -o beacon.yaml                   # current state, secrets as ${PLACEHOLDERS}
 pnpm beacon status
 ```
 
+<!-- prettier-ignore -->
 ```yaml
 version: 1
 statusPage:
@@ -485,42 +497,50 @@ channels:
 `${VAR:-default}` placeholders are expanded from the environment, so secrets never live in the
 file. The full example is in [`examples/beacon.yaml`](examples/beacon.yaml).
 
+`plan --detailed-exitcode` follows Terraform: 0 for no changes, 2 for drift, 1 for errors. `pnpm run`
+reports every non-zero exit as 1, so a drift check in a script should call the built CLI directly:
+
+```bash
+pnpm --filter "@beacon/cli..." build
+node --env-file-if-exists=.env packages/cli/dist/main.js plan -f examples/beacon.yaml --detailed-exitcode
+```
+
 ## Configuration
 
 All services read one `.env` (see [`.env.example`](.env.example)); every service validates its
 environment with Zod at startup and lists every problem at once.
 
-| Variable | Default | Used by | Purpose |
-| --- | --- | --- | --- |
-| `MONGO_URL` | `mongodb://127.0.0.1:27111/beacon` | all | MongoDB connection |
-| `REDIS_URL` | `redis://127.0.0.1:6411` | all | BullMQ and pub/sub |
-| `RAW_RETENTION_DAYS` | `14` | all | TTL of the `check_results` time-series collection |
-| `ALLOW_PRIVATE_TARGETS` | `false` (`.env.example`: `true`) | prober, evaluator | Allow probes and webhooks to reach private, loopback and link-local addresses |
-| `API_PORT` | `8111` | api | HTTP port |
-| `CORS_ORIGINS` | `http://localhost:3111,...` | api | Origins allowed on `/v1` and Socket.IO |
-| `REALTIME_SECRET` | dev default | api | HMAC key for Socket.IO tokens; must be unique in production |
-| `REVALIDATE_SECRET` | dev default | api, web | Shared secret for the ISR revalidation webhook |
-| `WEB_REVALIDATE_URL` | unset | api | Where to POST revalidation requests |
-| `PUBLIC_RATE_LIMIT_PER_MINUTE` | `300` | api | Rate limit on `/public` |
-| `AUTH_FAILURES_PER_15_MINUTES` | `50` | api | Failed API-key attempts allowed per IP |
-| `SSE_MAX_PER_IP` / `SSE_MAX_PER_ORG` | `20` / `5000` | api | Open status-page streams allowed |
-| `STATUS_CACHE_TTL_SECONDS` | `10` | api | In-process cache of the public status payload |
-| `REGION` | all three | prober | Comma list of regions this process serves |
-| `PROBE_CONCURRENCY` | `25` | prober | Concurrent probes per region |
-| `SIMULATED_RTT_MS` | `us-east:0,eu-west:38,ap-southeast:92` | prober | Latency added per simulated region |
-| `SMTP_URL` | unset (emails are logged) | evaluator | SMTP server, e.g. `smtp://mailpit:1025` |
-| `EMAIL_FROM` | `Beacon <alerts@beacon.local>` | evaluator | Sender address |
-| `RESOLVE_AFTER_SECONDS` | `180` | evaluator | Healthy time in `monitoring` before auto-resolve |
-| `REOPEN_WINDOW_SECONDS` | `900` | evaluator | A failure this soon after resolution reopens the incident |
-| `FLAP_WINDOW_MINUTES` / `FLAP_THRESHOLD` | `20` / `4` | evaluator | Transitions in the window that mark a monitor as flapping |
-| `FLAPPING_PAGE_DELAY_MINUTES` | `10` | evaluator | How long a flapping monitor's page is held back |
-| `RESULTS_CONCURRENCY` | `8` | evaluator | Parallel result evaluations |
-| `WEBHOOK_TIMEOUT_MS` | `10000` | evaluator | Timeout for Slack, Discord and webhook deliveries |
-| `API_INTERNAL_URL` / `BROWSER_API_URL` | `:8111` | web | API address for the server and for browsers |
-| `STATUS_REVALIDATE_SECONDS` | `60` | web | ISR ceiling for status pages |
-| `BEACON_API_KEY` | demo key | web (dev only), CLI | Auto sign-in in development; CLI credentials |
-| `CHAOS_PORT` / `CHAOS_ADMIN_TOKEN` | `5511` / unset | chaos target | Port, and the bearer token required in production |
-| `BEACON_API_URL` | `http://localhost:8111` | CLI | API base URL |
+| Variable                                 | Default                                | Used by             | Purpose                                                                       |
+| ---------------------------------------- | -------------------------------------- | ------------------- | ----------------------------------------------------------------------------- |
+| `MONGO_URL`                              | `mongodb://127.0.0.1:27111/beacon`     | all                 | MongoDB connection                                                            |
+| `REDIS_URL`                              | `redis://127.0.0.1:6411`               | all                 | BullMQ and pub/sub                                                            |
+| `RAW_RETENTION_DAYS`                     | `14`                                   | all                 | TTL of the `check_results` time-series collection                             |
+| `ALLOW_PRIVATE_TARGETS`                  | `false` (`.env.example`: `true`)       | prober, evaluator   | Allow probes and webhooks to reach private, loopback and link-local addresses |
+| `API_PORT`                               | `8111`                                 | api                 | HTTP port                                                                     |
+| `CORS_ORIGINS`                           | `http://localhost:3111,...`            | api                 | Origins allowed on `/v1` and Socket.IO                                        |
+| `REALTIME_SECRET`                        | dev default                            | api                 | HMAC key for Socket.IO tokens; must be unique in production                   |
+| `REVALIDATE_SECRET`                      | dev default                            | api, web            | Shared secret for the ISR revalidation webhook                                |
+| `WEB_REVALIDATE_URL`                     | unset                                  | api                 | Where to POST revalidation requests                                           |
+| `PUBLIC_RATE_LIMIT_PER_MINUTE`           | `300`                                  | api                 | Rate limit on `/public`                                                       |
+| `AUTH_FAILURES_PER_15_MINUTES`           | `50`                                   | api                 | Failed API-key attempts allowed per IP                                        |
+| `SSE_MAX_PER_IP` / `SSE_MAX_PER_ORG`     | `20` / `5000`                          | api                 | Open status-page streams allowed                                              |
+| `STATUS_CACHE_TTL_SECONDS`               | `10`                                   | api                 | In-process cache of the public status payload                                 |
+| `REGION`                                 | all three                              | prober              | Comma list of regions this process serves                                     |
+| `PROBE_CONCURRENCY`                      | `25`                                   | prober              | Concurrent probes per region                                                  |
+| `SIMULATED_RTT_MS`                       | `us-east:0,eu-west:38,ap-southeast:92` | prober              | Latency added per simulated region                                            |
+| `SMTP_URL`                               | unset (emails are logged)              | evaluator           | SMTP server, e.g. `smtp://mailpit:1025`                                       |
+| `EMAIL_FROM`                             | `Beacon <alerts@beacon.local>`         | evaluator           | Sender address                                                                |
+| `RESOLVE_AFTER_SECONDS`                  | `180`                                  | evaluator           | Healthy time in `monitoring` before auto-resolve                              |
+| `REOPEN_WINDOW_SECONDS`                  | `900`                                  | evaluator           | A failure this soon after resolution reopens the incident                     |
+| `FLAP_WINDOW_MINUTES` / `FLAP_THRESHOLD` | `20` / `4`                             | evaluator           | Transitions in the window that mark a monitor as flapping                     |
+| `FLAPPING_PAGE_DELAY_MINUTES`            | `10`                                   | evaluator           | How long a flapping monitor's page is held back                               |
+| `RESULTS_CONCURRENCY`                    | `8`                                    | evaluator           | Parallel result evaluations                                                   |
+| `WEBHOOK_TIMEOUT_MS`                     | `10000`                                | evaluator           | Timeout for Slack, Discord and webhook deliveries                             |
+| `API_INTERNAL_URL` / `BROWSER_API_URL`   | `:8111`                                | web                 | API address for the server and for browsers                                   |
+| `STATUS_REVALIDATE_SECONDS`              | `60`                                   | web                 | ISR ceiling for status pages                                                  |
+| `BEACON_API_KEY`                         | demo key                               | web (dev only), CLI | Auto sign-in in development; CLI credentials                                  |
+| `CHAOS_PORT` / `CHAOS_ADMIN_TOKEN`       | `5511` / unset                         | chaos target        | Port, and the bearer token required in production                             |
+| `BEACON_API_URL`                         | `http://localhost:8111`                | CLI                 | API base URL                                                                  |
 
 ## API overview
 
@@ -528,37 +548,119 @@ All `/v1` routes take `Authorization: Bearer <api key>` and are scoped to the ke
 Request bodies are validated with the shared Zod schemas; errors come back as
 `{ "error": { "code", "message", "details" } }`.
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/v1/me` | Current organization |
-| `GET` | `/v1/overview` | Totals, open incidents, uptime and per-monitor stats for the dashboard |
-| `GET` `POST` | `/v1/monitors` | List or create monitors |
-| `GET` `PUT` `DELETE` | `/v1/monitors/:id` | Read, replace or delete a monitor |
-| `POST` | `/v1/monitors/:id/pause` · `/resume` | Pause or resume probing |
-| `GET` | `/v1/monitors/:id/results` | Raw regional results, cursor-paginated |
-| `GET` | `/v1/monitors/:id/metrics?range=24h` | Latency percentiles and availability series from rollups |
-| `GET` | `/v1/monitors/:id/stats` | Uptime and latency summary |
-| `GET` `POST` | `/v1/incidents` | List (keyset pagination, `status=open|resolved`) or declare an incident |
-| `GET` | `/v1/incidents/:id` | Incident with its timeline |
-| `POST` | `/v1/incidents/:id/updates` | Post a timeline update; transitions are checked by the state machine |
-| `GET` `POST` | `/v1/slos` | List or create SLOs |
-| `GET` `DELETE` | `/v1/slos/:id` | SLO report (SLI, budget, burn-down, burn windows) or delete |
-| `GET` `POST` | `/v1/channels` | List (secrets redacted) or create alert channels |
-| `PATCH` `DELETE` | `/v1/channels/:id` | Enable, disable or delete a channel |
-| `POST` | `/v1/channels/:id/test` | Send a test notification |
-| `GET` | `/v1/notifications` | Delivery log |
-| `GET` `POST` `DELETE` | `/v1/maintenance[/:id]` | Maintenance windows |
-| `POST` | `/v1/config/plan` | Diff a `beacon.yaml` against current state; returns a `planHash` |
-| `POST` | `/v1/config/apply` | Apply; rejected if state changed since the `planHash` was issued |
-| `GET` | `/v1/config/export` | Current state as config, credentials replaced by placeholders |
-| `POST` | `/v1/realtime/token` | Short-lived HMAC token for the Socket.IO connection |
-| `GET` | `/public/status/:slug` | Public status payload (cached, CORS `*`) |
-| `GET` | `/public/status/:slug/badge.svg` | Overall badge, or `?component=<key>` for one component |
-| `GET` | `/public/status/:slug/events` | Server-Sent Events stream of public changes |
-| `GET` | `/healthz` · `/readyz` | Liveness and readiness (MongoDB and Redis) |
+| Method                | Path                                 | Description                                                            |
+| --------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
+| `GET`                 | `/v1/me`                             | Current organization                                                   |
+| `GET`                 | `/v1/overview`                       | Totals, open incidents, uptime and per-monitor stats for the dashboard |
+| `GET` `POST`          | `/v1/monitors`                       | List or create monitors                                                |
+| `GET` `PUT` `DELETE`  | `/v1/monitors/:id`                   | Read, replace or delete a monitor                                      |
+| `POST`                | `/v1/monitors/:id/pause` · `/resume` | Pause or resume probing                                                |
+| `GET`                 | `/v1/monitors/:id/results`           | Raw regional results, cursor-paginated                                 |
+| `GET`                 | `/v1/monitors/:id/metrics?range=24h` | Latency percentiles and availability series from rollups               |
+| `GET`                 | `/v1/monitors/:id/stats`             | Uptime and latency summary                                             |
+| `GET` `POST`          | `/v1/incidents`                      | List (keyset pagination, `status=open                                  | resolved`) or declare an incident |
+| `GET`                 | `/v1/incidents/:id`                  | Incident with its timeline                                             |
+| `POST`                | `/v1/incidents/:id/updates`          | Post a timeline update; transitions are checked by the state machine   |
+| `GET` `POST`          | `/v1/slos`                           | List or create SLOs                                                    |
+| `GET` `DELETE`        | `/v1/slos/:id`                       | SLO report (SLI, budget, burn-down, burn windows) or delete            |
+| `GET` `POST`          | `/v1/channels`                       | List (secrets redacted) or create alert channels                       |
+| `PATCH` `DELETE`      | `/v1/channels/:id`                   | Enable, disable or delete a channel                                    |
+| `POST`                | `/v1/channels/:id/test`              | Send a test notification                                               |
+| `GET`                 | `/v1/notifications`                  | Delivery log                                                           |
+| `GET` `POST` `DELETE` | `/v1/maintenance[/:id]`              | Maintenance windows                                                    |
+| `POST`                | `/v1/config/plan`                    | Diff a `beacon.yaml` against current state; returns a `planHash`       |
+| `POST`                | `/v1/config/apply`                   | Apply; rejected if state changed since the `planHash` was issued       |
+| `GET`                 | `/v1/config/export`                  | Current state as config, credentials replaced by placeholders          |
+| `POST`                | `/v1/realtime/token`                 | Short-lived HMAC token for the Socket.IO connection                    |
+| `GET`                 | `/public/status/:slug`               | Public status payload (cached, CORS `*`)                               |
+| `GET`                 | `/public/status/:slug/badge.svg`     | Overall badge, or `?component=<key>` for one component                 |
+| `GET`                 | `/public/status/:slug/events`        | Server-Sent Events stream of public changes                            |
+| `GET`                 | `/healthz` · `/readyz`               | Liveness and readiness (MongoDB and Redis)                             |
 
 Webhook deliveries carry `x-beacon-event`, `x-beacon-delivery` and, when the channel has a secret,
 a Stripe-style `x-beacon-signature: t=<unix>,v1=<hmac-sha256 of "t.body">`.
+
+### Examples
+
+Captured from the Compose stack with the seeded demo key.
+
+```http
+POST /v1/monitors
+Authorization: Bearer bk_demo_acme_local_development_key
+Content-Type: application/json
+
+{ "key": "marketing-site", "name": "Marketing site", "group": "Storefront",
+  "check": { "type": "http", "url": "http://chaos-target:5511/" }, "intervalSeconds": 60 }
+```
+
+```json
+201 Created
+{
+  "id": "6aef91fe3290bc751bc6a439",
+  "key": "marketing-site",
+  "name": "Marketing site",
+  "group": "Storefront",
+  "check": { "type": "http", "url": "http://chaos-target:5511/", "method": "GET", "headers": {},
+             "expectedStatus": ["2xx"], "followRedirects": true },
+  "intervalSeconds": 60,
+  "timeoutMs": 10000,
+  "regions": ["us-east", "eu-west", "ap-southeast"],
+  "quorum": 2,
+  "failThreshold": 2,
+  "recoverThreshold": 3,
+  "managedBy": "ui",
+  "status": "pending",
+  "regionStatus": [],
+  "inMaintenance": false
+}
+```
+
+The same request with a bad key, an empty name and an `ftp://` URL is rejected field by field:
+
+```json
+400 Bad Request
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "The request did not pass validation",
+    "details": [
+      { "path": "key", "message": "Use lowercase letters, numbers and single dashes, like public-api" },
+      { "path": "name", "message": "Too small: expected string to have >=1 characters" },
+      { "path": "check.url", "message": "Invalid URL" }
+    ]
+  }
+}
+```
+
+Without a key:
+
+```json
+401 Unauthorized
+{ "error": { "code": "unauthorized", "message": "Send an API key as `Authorization: Bearer <key>`" } }
+```
+
+`beacon plan` against the same stack, where the example file points the database checks at the
+local-dev ports instead of the Compose service names:
+
+```text
+$ beacon validate -f examples/beacon.yaml
+examples/beacon.yaml is valid: 6 monitors, 4 SLOs, 4 channels.
+
+$ beacon plan -f examples/beacon.yaml
+Beacon will perform the following actions:
+
+  ~ monitor primary-database
+      check.host: "mongo" -> "127.0.0.1"
+      check.port: 27017 -> 27111
+  ~ monitor session-cache
+      check.host: "redis" -> "127.0.0.1"
+      check.port: 6379 -> 6411
+  ~ channel incidents-slack
+      target.url: "(sensitive)" -> "(sensitive)"
+  ...
+
+Plan: 0 to create, 5 to update, 0 to delete (10 unchanged)
+```
 
 ## Engineering decisions and trade-offs
 
@@ -584,7 +686,8 @@ MongoDB time-series collection (`metaField: { monitorId, orgId, region }`) that 
 `RAW_RETENTION_DAYS`. Rollups are rebuilt for a trailing window with `$group` and `$merge`
 (`whenMatched: replace`), so re-running a window, late results and overlapping schedules are
 harmless. 1m feeds 1h feeds 1d, and each level has its own TTL (3, 45 and 400 days). Charts, the
-90-day bar and SLOs never scan raw data.
+90-day bar and SLOs never scan raw data. An SLO window longer than the hourly retention (90 days)
+reads its older part from daily rollups, so it is not silently cut to 45 days.
 
 **Mergeable latency histograms.** Every rollup stores counts in fixed latency buckets
 (25ms to 10s). An hourly histogram is the element-wise sum of its minutes, so p50 and p95 can be
@@ -646,8 +749,7 @@ beacon-status/
 ├── examples/beacon.yaml   Monitoring-as-code example for the demo org
 ├── scripts/               infra.sh, dev.sh, chaos.sh
 ├── docker/                Multi-stage Node Dockerfile (runtime and tools targets)
-├── docker-compose.yml     Full stack with three prober containers and Mailpit
-└── .github/workflows/     typecheck, lint, test, build, config validation, image builds, compose smoke test
+└── docker-compose.yml     Full stack with three prober containers and Mailpit
 ```
 
 ## Testing
@@ -657,26 +759,23 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm build
 pnpm --filter @beacon/web e2e    # Playwright smoke tests against a running, seeded stack
 ```
 
-`pnpm test` runs 130 Vitest tests in 15 files across the 8 workspace packages (shared 34, api 27,
-core 17, prober 15, cli 13, evaluator 11, web 7, chaos-target 6). The integration suites use a real
-MongoDB and Redis (`TEST_MONGO_URL`, `TEST_REDIS_URL`, defaulting to the local dev ports) and create
-an isolated database per suite.
+`pnpm test` runs 132 Vitest tests in 16 files across the 8 workspace packages (shared 34, api 27,
+core 19, prober 15, cli 13, evaluator 11, web 7, chaos-target 6). The integration suites use a real
+MongoDB and Redis (`TEST_MONGO_URL`, `TEST_REDIS_URL`, defaulting to the local dev ports, which
+`./scripts/infra.sh up` or `docker compose up -d mongo redis` provide) and create an isolated
+database per suite.
 
-| Area | What is covered |
-| --- | --- |
-| Evaluation | Quorum, stale regions, round closing, fail and recover thresholds, flapping, out-of-order results |
-| Domain | Incident transitions and automation, SLO budgets and burn policies, uptime bars, histograms, config planning |
-| Prober | HTTP, keyword, TCP and SSL checks against local servers; result persistence and publishing |
-| Evaluator | Concurrent results opening exactly one incident, paging and follow-up rules, maintenance windows, redelivered results, outbox replay, requeue of lost delivery jobs, Slack payloads and webhook signatures |
-| Rollups | 1m, 1h and 1d aggregation pipelines and idempotent re-runs |
-| API | Supertest over auth, validation, monitors, incidents, SLOs, channels, config plan/apply, public routes and badges |
-| Realtime | Token signing, SSE limits and fan-out filtering, revalidation debouncing |
-| CLI | Config parsing and env expansion, plan rendering, plan/apply with the plan hash, exit codes, confirmation, export |
-| Web | Formatting helpers; Playwright: sign in, create a monitor, run an incident to resolution, read the status page, fetch the badge |
-
-CI runs the same checks against MongoDB and Redis service containers, validates
-`examples/beacon.yaml`, builds every Docker image, and boots the Compose stack to check that the
-seeded status page and badge render.
+| Area             | What is covered                                                                                                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Evaluation       | Quorum, stale regions, round closing, fail and recover thresholds, flapping, out-of-order results                                                                                                          |
+| Domain           | Incident transitions and automation, SLO budgets and burn policies, uptime bars, histograms, config planning                                                                                               |
+| Prober           | HTTP, keyword, TCP and SSL checks against local servers; result persistence and publishing                                                                                                                 |
+| Evaluator        | Concurrent results opening exactly one incident, paging and follow-up rules, maintenance windows, redelivered results, outbox replay, requeue of lost delivery jobs, Slack payloads and webhook signatures |
+| Rollups and SLOs | 1m, 1h and 1d aggregation pipelines, idempotent re-runs, and SLO windows that outlive the hourly rollups                                                                                                   |
+| API              | Supertest over auth, validation, monitors, incidents, SLOs, channels, config plan/apply, public routes and badges                                                                                          |
+| Realtime         | Token signing, SSE limits and fan-out filtering, revalidation debouncing                                                                                                                                   |
+| CLI              | Config parsing and env expansion, plan rendering, plan/apply with the plan hash, exit codes, confirmation, export                                                                                          |
+| Web              | Formatting helpers; Playwright: sign in, create a monitor, run an incident to resolution, read the status page, fetch the badge                                                                            |
 
 ## Roadmap
 

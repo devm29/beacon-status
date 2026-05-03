@@ -10,11 +10,13 @@ import {
 } from "@beacon/shared";
 import type { Types } from "mongoose";
 import { RollupModel, SloModel, type MonitorDoc, type SloDoc } from "../models/index.js";
-import { floorTo, queryBuckets } from "./rollups.js";
+import { ROLLUP_RETENTION_MS, floorTo, queryBuckets } from "./rollups.js";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const MINUTE_RESOLUTION_LIMIT_MS = 6 * HOUR;
+/** Hourly rollups expire, so the part of a window older than this is read from daily rollups. */
+const HOURLY_RESOLUTION_LIMIT_MS = ROLLUP_RETENTION_MS["1h"] - 2 * DAY;
 
 interface CountBucket extends Counts {
   start: number;
@@ -76,15 +78,39 @@ export class SloService {
     return evaluateBurnPolicies(countsFor, slo.target, policies);
   }
 
+  /**
+   * A 90-day window outlives the hourly rollups, so anything older than the hourly retention comes
+   * from whole daily buckets. The window can then start up to a day early, which is negligible next
+   * to dropping half of it.
+   */
   async windowTotals(monitorId: Types.ObjectId, windowDays: number, now: Date): Promise<Counts> {
-    const [bucket] = await queryBuckets({
-      monitorIds: [monitorId],
-      granularity: "1h",
-      from: floorTo(new Date(now.getTime() - windowDays * DAY), "1h"),
-      to: now,
-      collapse: true,
+    const from = floorTo(new Date(now.getTime() - windowDays * DAY), "1h");
+    const split = floorTo(new Date(now.getTime() - HOURLY_RESOLUTION_LIMIT_MS), "1d");
+    const reads = [
+      queryBuckets({
+        monitorIds: [monitorId],
+        granularity: "1h",
+        from: from > split ? from : split,
+        to: now,
+        collapse: true,
+      }),
+    ];
+    if (from < split) {
+      reads.push(
+        queryBuckets({
+          monitorIds: [monitorId],
+          granularity: "1d",
+          from: floorTo(from, "1d"),
+          to: split,
+          collapse: true,
+        }),
+      );
+    }
+    const buckets = (await Promise.all(reads)).flat();
+    return buckets.reduce((sum, b) => ({ good: sum.good + b.up + b.degraded, total: sum.total + b.total }), {
+      good: 0,
+      total: 0,
     });
-    return bucket ? { good: bucket.up + bucket.degraded, total: bucket.total } : { good: 0, total: 0 };
   }
 
   async evaluate(slo: SloDoc, now: Date): Promise<SloEvaluationResult> {

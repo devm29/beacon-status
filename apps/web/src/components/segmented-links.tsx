@@ -16,7 +16,7 @@ export function SegmentedLinks<T extends string>({
   return (
     <nav
       aria-label={label}
-      className="inline-flex h-8 items-center rounded-lg bg-secondary p-0.5 dark:bg-[oklch(0.294_0.004_286.2)]"
+      className="inline-flex h-8 items-center rounded-lg bg-secondary p-0.5 dark:bg-[oklch(0.294_0.004_235)]"
     >
       {options.map((option) => {
         const active = option.value === value;

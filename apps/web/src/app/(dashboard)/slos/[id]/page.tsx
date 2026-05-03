@@ -56,7 +56,7 @@ export default async function SloPage({ params }: { params: Promise<{ id: string
         </div>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Key metrics">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" aria-label="Key metrics">
         <KpiTile label="Availability" value={formatPercent(slo.sli, 3)} detail={`Target ${slo.target}%`} />
         <KpiTile
           label="Error budget left"

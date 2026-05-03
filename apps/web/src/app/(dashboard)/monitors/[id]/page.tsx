@@ -110,7 +110,7 @@ export default async function MonitorPage({
         </div>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Key metrics">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" aria-label="Key metrics">
         <KpiTile label="Uptime, 24 hours" value={formatPercent(stats.uptime24h, 3)} />
         <KpiTile label="Uptime, 30 days" value={formatPercent(stats.uptime30d, 3)} />
         <KpiTile label="p95 response, 24h" value={formatMs(stats.p95Ms24h)} />

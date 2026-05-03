@@ -48,7 +48,7 @@ export function MonitorTable({ rows, compact = false }: { rows: MonitorRow[]; co
         <TableRow className="hover:bg-transparent">
           <TableHead>Monitor</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead>Regions</TableHead>
+          <TableHead className="hidden sm:table-cell">Regions</TableHead>
           <TableHead className="hidden lg:table-cell">Last hour</TableHead>
           <TableHead className="text-right">Uptime 24h</TableHead>
           {compact ? null : <TableHead className="hidden text-right sm:table-cell">p95 24h</TableHead>}
@@ -59,7 +59,7 @@ export function MonitorTable({ rows, compact = false }: { rows: MonitorRow[]; co
           const { tone, label } = monitorTone(monitor);
           return (
             <TableRow key={monitor.id} className="relative">
-              <TableCell className="max-w-64">
+              <TableCell className="max-w-44 sm:max-w-64">
                 <Link
                   href={`/monitors/${monitor.id}`}
                   className="font-medium outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:underline focus-visible:after:ring-4 focus-visible:after:ring-ring"
@@ -77,7 +77,7 @@ export function MonitorTable({ rows, compact = false }: { rows: MonitorRow[]; co
                   pulse={monitor.status === "down"}
                 />
               </TableCell>
-              <TableCell className="relative z-10">
+              <TableCell className="relative z-10 hidden sm:table-cell">
                 <RegionDots regions={mergeRegions(monitor.regionStatus, live[monitor.id])} />
               </TableCell>
               <TableCell className="hidden lg:table-cell">

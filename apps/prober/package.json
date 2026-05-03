@@ -13,13 +13,13 @@
   "dependencies": {
     "@beacon/core": "workspace:*",
     "@beacon/shared": "workspace:*",
-    "bullmq": "^5.61.0",
-    "zod": "^4.1.0",
-    "mongoose": "^8.19.0"
+    "bullmq": "^5.81.5",
+    "zod": "^4.6.7",
+    "mongoose": "^8.24.4"
   },
   "devDependencies": {
-    "@types/node": "^22.18.0",
-    "tsx": "^4.20.0",
-    "vitest": "^3.2.4"
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "vitest": "^3.2.7"
   }
 }
